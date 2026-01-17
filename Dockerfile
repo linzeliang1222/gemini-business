@@ -1,6 +1,9 @@
 # Dockerfile for Gemini Business API（带注册功能）
-# 使用 uv 管理依赖，包含 Chrome + Xvfb 支持注册功能
+# 使用 uv 管理依赖，包含 Chrome/Chromium + Xvfb 支持注册功能
 FROM python:3.11-slim
+
+# 获取目标架构
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -11,11 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# 添加 Google Chrome 源
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+# 根据架构添加 Chrome 源（仅 amd64）
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg && \
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
+    fi
 
-# 安装 Chrome、Xvfb 和必要的依赖
+# 安装浏览器、Xvfb 和必要的依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     libasound2 \
@@ -38,7 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdg-utils \
     xvfb \
     x11-utils \
-    google-chrome-stable \
+    $(if [ "$TARGETARCH" = "amd64" ]; then echo "google-chrome-stable"; else echo "chromium chromium-driver"; fi) \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 uv
@@ -69,15 +74,20 @@ rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null\n\
 Xvfb :99 -screen 0 1920x1080x24 &\n\
 sleep 1\n\
 export DISPLAY=:99\n\
+# 根据实际安装的浏览器设置 CHROME_BIN\n\
+if [ -f /usr/bin/google-chrome-stable ]; then\n\
+    export CHROME_BIN=/usr/bin/google-chrome-stable\n\
+elif [ -f /usr/bin/chromium ]; then\n\
+    export CHROME_BIN=/usr/bin/chromium\n\
+fi\n\
 echo "Xvfb started on :99"\n\
+echo "Browser: $CHROME_BIN"\n\
 exec "$@"\n' > /app/start-xvfb.sh && chmod +x /app/start-xvfb.sh
 
 # 设置环境变量
 ENV DISPLAY=:99
 # 设置时区为东八区（北京时间）
 ENV TZ=Asia/Shanghai
-# 🔥 艹，明确指定Chrome路径，避免"Binary Location Must be a String"错误
-ENV CHROME_BIN=/usr/bin/google-chrome-stable
 
 # 使用 Xvfb 启动脚本作为 entrypoint
 ENTRYPOINT ["/app/start-xvfb.sh"]
