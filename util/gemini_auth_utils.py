@@ -551,7 +551,15 @@ class GeminiAuthFlow:
             elif os.path.exists('/usr/bin/google-chrome'):
                 options.binary_location = '/usr/bin/google-chrome'
 
-            driver = uc.Chrome(options=options, use_subprocess=True)
+            # 指定 chromedriver 路径（避免 ARM64 架构下自动下载 AMD64 版本）
+            driver_path = None
+            if os.path.exists('/usr/bin/chromedriver'):
+                driver_path = '/usr/bin/chromedriver'
+
+            if driver_path:
+                driver = uc.Chrome(options=options, driver_executable_path=driver_path, use_subprocess=True)
+            else:
+                driver = uc.Chrome(options=options, use_subprocess=True)
             wait = WebDriverWait(driver, 30)
 
             # 2. 访问登录页
